@@ -237,8 +237,8 @@ where
             .map(|g| {
                 g.pixel_bounding_box()
                     .map(|b| b.min.x as f32 + g.unpositioned().h_metrics().advance_width)
-                    .unwrap() //TODO
             })
+            .flatten()
             .unwrap_or(0.0)
             .ceil() as i32;
 
@@ -252,43 +252,40 @@ where
                         let off_x = off_x as i32 + bb.min.x;
                         let off_y = off_y as i32 + bb.min.y;
                         // There's still a possibility that the glyph clips the boundaries of the bitmap TODO are u sure?
-                        if off_x >= 0 && off_x < width as i32 && off_y >= 0 && off_y < height as i32
-                        {
-                            let text_a = (v * 255.0) as u32;
+                        // if off_x >= 0 && off_x < width as i32 && off_y >= 0 && off_y < height as i32
+                        // {
+                        let text_a = (v * 255.0) as u32;
 
-                            let bg_color = match self.anti_aliasing {
-                                AntiAliasing::BackgroundColor => self.background_color,
-                                AntiAliasing::SolidColor(c) => Some(c),
-                                AntiAliasing::None => None,
-                            };
-                            match bg_color {
-                                None => {
-                                    if text_a > 127 {
-                                        let _ = target.draw_iter([Pixel(
-                                            Point::new(position.x + off_x, position.y + off_y),
-                                            text_color,
-                                        )]);
-                                    }
-                                }
-                                Some(color) => {
-                                    let a = text_a as u16;
-                                    let fg = text_color.into();
-                                    let bg = color.into();
-                                    // blend with background color
-                                    let new_r =
-                                        (a * fg.r() as u16 + (255 - a) * bg.r() as u16) / 255;
-                                    let new_g =
-                                        (a * fg.g() as u16 + (255 - a) * bg.g() as u16) / 255;
-                                    let new_b =
-                                        (a * fg.b() as u16 + (255 - a) * bg.b() as u16) / 255;
-
+                        let bg_color = match self.anti_aliasing {
+                            AntiAliasing::BackgroundColor => self.background_color,
+                            AntiAliasing::SolidColor(c) => Some(c),
+                            AntiAliasing::None => None,
+                        };
+                        match bg_color {
+                            None => {
+                                if text_a > 127 {
                                     let _ = target.draw_iter([Pixel(
                                         Point::new(position.x + off_x, position.y + off_y),
-                                        Rgb888::new(new_r as u8, new_g as u8, new_b as u8).into(),
+                                        text_color,
                                     )]);
                                 }
                             }
+                            Some(color) => {
+                                let a = text_a as u16;
+                                let fg = text_color.into();
+                                let bg = color.into();
+                                // blend with background color
+                                let new_r = (a * fg.r() as u16 + (255 - a) * bg.r() as u16) / 255;
+                                let new_g = (a * fg.g() as u16 + (255 - a) * bg.g() as u16) / 255;
+                                let new_b = (a * fg.b() as u16 + (255 - a) * bg.b() as u16) / 255;
+
+                                let _ = target.draw_iter([Pixel(
+                                    Point::new(position.x + off_x, position.y + off_y),
+                                    Rgb888::new(new_r as u8, new_g as u8, new_b as u8).into(),
+                                )]);
+                            }
                         }
+                        // }
                     });
                 }
             }
