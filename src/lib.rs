@@ -228,32 +228,30 @@ where
 
         let v_metrics = self.font.v_metrics(scale);
         let offset = rusttype::point(0.0, v_metrics.ascent);
+        //TODO: Fix this stupid allocation and prob similar ones in this crate
 
-        let glyphs: Vec<rusttype::PositionedGlyph> =
-            self.font.layout(text, scale, offset).collect();
-
-        let width = glyphs
-            .iter()
-            .rev()
-            .filter_map(|g| {
+        let width = self
+            .font
+            .layout(text, scale, offset)
+            .last()
+            .map(|g| {
                 g.pixel_bounding_box()
                     .map(|b| b.min.x as f32 + g.unpositioned().h_metrics().advance_width)
+                    .unwrap() //TODO
             })
-            .next()
             .unwrap_or(0.0)
             .ceil() as i32;
 
         let height = self.font_size as i32;
 
-        let mut pixels = Vec::new();
-
+        self.draw_background(width as u32, position, target)?;
         if let Some(text_color) = self.text_color {
-            for g in glyphs.iter() {
+            for g in self.font.layout(text, scale, offset) {
                 if let Some(bb) = g.pixel_bounding_box() {
                     g.draw(|off_x, off_y, v| {
                         let off_x = off_x as i32 + bb.min.x;
                         let off_y = off_y as i32 + bb.min.y;
-                        // There's still a possibility that the glyph clips the boundaries of the bitmap
+                        // There's still a possibility that the glyph clips the boundaries of the bitmap TODO are u sure?
                         if off_x >= 0 && off_x < width as i32 && off_y >= 0 && off_y < height as i32
                         {
                             let text_a = (v * 255.0) as u32;
@@ -264,25 +262,30 @@ where
                                 AntiAliasing::None => None,
                             };
                             match bg_color {
-                                None => if text_a > 127 {
-                                    pixels.push(Pixel(
-                                        Point::new(position.x + off_x, position.y + off_y),
-                                        text_color
-                                    ));
+                                None => {
+                                    if text_a > 127 {
+                                        let _ = target.draw_iter([Pixel(
+                                            Point::new(position.x + off_x, position.y + off_y),
+                                            text_color,
+                                        )]);
+                                    }
                                 }
                                 Some(color) => {
                                     let a = text_a as u16;
                                     let fg = text_color.into();
                                     let bg = color.into();
                                     // blend with background color
-                                    let new_r = (a * fg.r() as u16 + (255-a) * bg.r() as u16) / 255;
-                                    let new_g = (a * fg.g() as u16 + (255-a) * bg.g() as u16) / 255;
-                                    let new_b = (a * fg.b() as u16 + (255-a) * bg.b() as u16) / 255;
+                                    let new_r =
+                                        (a * fg.r() as u16 + (255 - a) * bg.r() as u16) / 255;
+                                    let new_g =
+                                        (a * fg.g() as u16 + (255 - a) * bg.g() as u16) / 255;
+                                    let new_b =
+                                        (a * fg.b() as u16 + (255 - a) * bg.b() as u16) / 255;
 
-                                    pixels.push(Pixel(
+                                    let _ = target.draw_iter([Pixel(
                                         Point::new(position.x + off_x, position.y + off_y),
                                         Rgb888::new(new_r as u8, new_g as u8, new_b as u8).into(),
-                                    ));
+                                    )]);
                                 }
                             }
                         }
@@ -291,8 +294,7 @@ where
             }
         }
 
-        self.draw_background(width as u32, position, target)?;
-        target.draw_iter(pixels)?;
+        // target.draw_iter(pixels)?;
         self.draw_strikethrough(width as u32, position, target)?;
         self.draw_underline(width as u32, position, target)?;
 
